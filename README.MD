@@ -12,6 +12,10 @@ Only requires curl.
 
 `sudo apt-get install curl`
 
-## Note
+## Notes
 
 DO NOT DELETE .BLANK
+
+If you don't have LuaJIT installed, change the first line to 
+
+`#!/usr/bin/env lua`
