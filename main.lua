@@ -1,0 +1,222 @@
+#!/usr/bin/env luajit
+
+local http = require("newhttp")
+local json = require("dkjson")
+local board = ""
+local thread = ""
+print("Laine-CLI 1.0")
+print("Loading...")
+arg = arg or {}
+local explode = function(d,p)
+   local t, ll
+   t={}
+   ll=0
+   if(#p == 1) then
+      return {p}
+   end
+   while true do
+      l = string.find(p, d, ll) -- find the next d in the string
+      if l ~= nil then -- if "not not" found then..
+         table.insert(t, string.sub(p,ll,l-1)) -- Save it in our array.
+         ll = l + 1 -- save just after where we found it for searching next time.
+      else
+         table.insert(t, string.sub(p,ll)) -- Save what's left in our array.
+         break -- Break at end, as it should be, according to the lua manual.
+      end
+   end
+   return t
+end
+if (arg[1] == "forcewget") then
+	print("\27[1;33mWarning:\27[0m Forcing wget.")
+	http.tested = true
+end
+local con = http.newConnection()
+con.url = "https://lunaboards.xyz/api/boards"
+con.headers["User-Agent"] = "Laine-CLI/1.0"
+local boards = json.decode(con:send())
+print("Luna - Late Night Shitposting")
+_G.commands = {}
+commands = {
+	listboards = function()
+		for i=1, #boards do
+			print("/"..boards[i].id.."/ - "..boards[i].desc1)
+		end
+	end,
+	setboard = function(b)
+		local found = false
+		for i=1, #boards do
+			if (boards[i].id == b) then
+				found = true
+				break
+			end
+		end
+		if (not found) then
+			print("\27[1;31mError:\27[0m Board not found.")
+		else
+			board = b
+			thread = ""
+		end
+	end,
+	listthreads = function()
+		if (board == "") then
+			print("\27[1;31mError:\27[0m Select a board first.")
+		else
+			con = http.newConnection()
+			con.url = "https://lunaboards.xyz/api/threads?board="..board
+			con.headers["User-Agent"] = "Laine-CLI/1.0"
+			local threads = json.decode(con:send())
+			for i=1, #threads do
+				io.stdout:write("["..threads[i].id.."] ")
+				if (threads[i].pinned) then
+					io.stdout:write("\27[1;93m")
+				end
+				if (threads[i].locked) then
+					io.stdout:write("\27[3;37m")
+				end
+				print(threads[i].name .. "\27[0m")
+			end
+		end
+	end,
+	setthread = function(t)
+		if (board == "") then
+			print("\27[1;31mError:\27[0m Select a board first.")
+		else
+			con = http.newConnection()
+			con.url = "https://lunaboards.xyz/api/threads?board="..board
+			con.headers["User-Agent"] = "Laine-CLI/1.0"
+			local threads = json.decode(con:send())
+			local found = false
+			for i=1, #threads do
+				if (tostring(threads[i].id) == t) then
+					found = true
+					break
+				end
+			end
+			if (not found) then
+				print("\27[1;31mError:\27[0m Thread not found.")
+			else
+				thread = t
+			end
+		end
+	end,
+	listposts = function()
+		if (board == "") then
+			print("\27[1;31mError:\27[0m Select a board first.")
+			return
+		end
+		if (thread == "") then
+			print("\27[1;31mError:\27[0m Select a thread first.")
+			return
+		end
+		con = http.newConnection()
+		con.url = "https://lunaboards.xyz/api/posts?board="..board.."&id="..thread
+		con.headers["User-Agent"] = "Laine-CLI/1.0"
+		local posts = json.decode(con:send())
+		for i=1, #posts do
+			if (posts[i].admin) then
+				print(" "..posts[i].admin)
+			end
+			print(" Post ID: "..posts[i].id.." - "..os.date("%a %b %d, %Y %X", posts[i].date))
+			if (posts[i].hasimg or posts[i].hasvid) then
+				print(" \27[3;37mFile: https://lunaboards.xyz/static"..posts[i].img.."\27[0m")
+			end
+			--process the post
+			local post = explode("\n", posts[i].post:gsub("\r", ""):gsub("\n+", "\n"))
+			for i=1, #post do
+				if (post[i]:sub(1, 1) == ">") then
+					post[i] = "\27[0;35m"..post[i].."\27[0m"
+				end
+				if (i ~= 1) then
+					post[i] = " ".. post[i]
+				end
+			end
+			local p = table.concat(post, "\n"):gsub("\r", ""):gsub("\n+", "\n")
+			print(" | "..p)
+		end
+	end,
+	newthread = function()
+		if (board == "") then
+			print("\27[1;31mError:\27[0m Select a board first.")
+			return
+		end
+		con = http.newConnection()
+		io.stdout:write("Title: ")
+		local ti = io.stdin:read()
+		io.stdout:write("Post (End with CTRL-B): ")
+		local post = io.stdin:read()
+		local p = post
+		while (post:sub(-1) ~= string.char(2)) do
+			--print(post:sub(-1):byte())
+			post = io.stdin:read()
+			p = p .. "\\r\\n" .. post
+		end
+		--local thd = lunamp.newthread(con, board, ti, p:sub(1, -2))
+		con.url = "https://lunaboards.xyz/"..board.."/nt"
+		con.type = "POST"
+		con.payload = {
+			["file"] = "@.blank",
+			["board"] = board,
+			["title"] = ti,
+			["content"] = p:sub(1, -2)
+		}
+		local thd = con:send()
+		print("Post created at /"..board.."/"..thd)
+		thread = tostring(thd)
+	end,
+	newpost = function()
+		if (board == "") then
+			print("\27[1;31mError:\27[0m Select a board first.")
+			return
+		end
+		if (thread == "") then
+			print("\27[1;31mError:\27[0m Select a board first.")
+			return
+		end
+		io.stdout:write("Post (End with CTRL-B): ")
+		local post = io.stdin:read()
+		local p = post
+		while (post:sub(-1) ~= string.char(2)) do
+			post = io.stdin:read()
+			p = p .. "\r\n" .. post
+		end
+		--local thd = lunamp.post(con, board, thread, p:sub(1, -2))
+		con.url = "https://lunaboards.xyz/"..board.."/post"
+		con.type = "POST"
+		con.payload = {
+			["file"] = "@.blank",
+			["board"] = board,
+			["id"] = thread,
+			["content"] = p:sub(1, -2)
+		}
+		local thd = con:send()
+		print(thd)
+	end,
+	exit = function()
+		os.exit()
+	end,
+	commands = function()
+		print (_G.commands)
+		for k, v in pairs(_G.commands) do
+			print(k)
+		end
+	end
+}
+commands.listboards()
+while(true) do
+	io.stdout:write("> ")
+	local com = io.stdin:read()
+	local c = com:match(".+ ")
+	local a = ""
+	if (c == nil) then
+		c = com
+	else
+		c = c:sub(1, -2)
+		a = com:match(" .+"):sub(2)
+	end
+
+	if (commands[c]) then
+		commands[c](a)
+	else
+			print("\27[1;31mError:\27[0m Invalid command. Type commands for list of commands.")
+	end
+end
