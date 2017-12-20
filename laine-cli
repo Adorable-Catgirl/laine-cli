@@ -148,7 +148,7 @@ commands = {
 		while (post:sub(-1) ~= string.char(2)) do
 			--print(post:sub(-1):byte())
 			post = io.stdin:read()
-			p = p .. "\\r\\n" .. post
+			p = p .. "\r\n" .. post
 		end
 		--local thd = lunamp.newthread(con, board, ti, p:sub(1, -2))
 		con.url = "https://lunaboards.xyz/"..board.."/nt"
