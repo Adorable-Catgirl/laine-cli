@@ -11,3 +11,7 @@ Shitposting from the CLI.
 Only requires curl.
 
 `sudo apt-get install curl`
+
+## Note
+
+DO NOT DELETE .BLANK
